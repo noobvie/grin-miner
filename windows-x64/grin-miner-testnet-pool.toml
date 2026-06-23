@@ -1,0 +1,85 @@
+# =============================================================================
+# grin-miner config — Windows (x86_64) -> Grin TESTNET public pool
+#
+# Built and run inside WSL2 (Ubuntu). See README-windows-testnet.md — there is
+# NO official native-Windows grin-miner build, so the supported path is WSL2,
+# which reuses the working Linux build for BOTH GPU (CUDA) and CPU (lean C32).
+#
+# Usage (inside your WSL2 shell, from the repo root):
+#   cp windows-x64/grin-miner-testnet-pool.toml ./grin-miner.toml
+#   # edit the two TODO lines + pick ONE solver block below, then:
+#   ./target/release/grin-miner
+# =============================================================================
+
+#########################################
+### LOGGING CONFIGURATION             ###
+#########################################
+[logging]
+log_to_stdout = true
+stdout_log_level = "Info"        # bump to "Debug" if the pool connection misbehaves
+log_to_file = true
+file_log_level = "Debug"
+log_file_path = "grin-miner.log"
+log_file_append = true
+
+#########################################
+### MINING CLIENT CONFIGURATION       ###
+#########################################
+[mining]
+
+# Show the terminal UI. Set false to just stream log lines (handy over SSH / for
+# capturing output to share). The miner works either way.
+run_tui = true
+
+# ---- TODO 1: your testnet pool's PUBLIC stratum endpoint --------------------
+# Testnet public-pool stratum default port is 13333 (mainnet would be 3333).
+# Use the host miners connect to (your pool domain or a regional gateway).
+stratum_server_addr = "YOUR_POOL_HOST:13333"
+
+# ---- TODO 2: address-as-identity login -------------------------------------
+# The pool is 2miners-style: the stratum USERNAME is  <grin_address>.<worker>.
+# On testnet the address starts with "tgrin1...". The worker name is anything.
+# Password is ignored by the pool but must be present.
+stratum_server_login    = "tgrin1youraddresshere.winworker"
+stratum_server_password = "x"
+
+# Plain TCP stratum (the toolkit pool terminates TLS at nginx for HTTPS only;
+# the stratum port itself is plain TCP). Leave false.
+stratum_server_tls_enabled = false
+
+# Where grin-miner looks for *.cuckooplugin. A normal `cargo build --release`
+# puts them in target/release/plugins (the default search path), so this is
+# usually left commented.
+#miner_plugin_dir = "/absolute/path/to/grin-miner/target/release/plugins"
+
+# =============================================================================
+# SOLVER PLUGIN — PICK EXACTLY ONE of the two blocks below (comment out the
+# other). Leaving both enabled runs both and competes for the machine.
+# =============================================================================
+
+###############################################################
+### OPTION A — GPU (NVIDIA, CUDA)  *** recommended ***       ###
+###############################################################
+# Fast. cuckatoo_mean_cuda_rtx_32 is the ONLY EDGEBITS=32 CUDA target — it is
+# the live-network PoW. Needs a CUDA-capable NVIDIA GPU with enough VRAM
+# (mean C32 wants a high-end card; if it OOMs on your GPU, use Option B).
+# In WSL2 this works via NVIDIA's CUDA-on-WSL passthrough (driver on Windows,
+# CUDA toolkit inside WSL). Verify with `nvidia-smi` inside WSL first.
+[[mining.miner_plugin_config]]
+plugin_name = "cuckatoo_mean_cuda_rtx_32"
+[mining.miner_plugin_config.parameters]
+# GPU device index from `nvidia-smi` (0 = first card). Add one block per GPU.
+device = 0
+
+###############################################################
+### OPTION B — CPU lean C32 (no GPU)                        ###
+###############################################################
+# Slow but correct; ~1 GB RAM. Built by the CMakeLists patch on this branch
+# (cuckatoo_lean_cpu_compat_32 — the x86_64 target uses NSIPHASH=4 / SSE2).
+# Uncomment this block AND comment out Option A above.
+#[[mining.miner_plugin_config]]
+#plugin_name = "cuckatoo_lean_cpu_compat_32"
+#[mining.miner_plugin_config.parameters]
+## Start at (physical cores - 1) to keep the machine responsive. More threads
+## is not a linear gain for the lean solver — tune by watching graphs/sec.
+#nthreads = 7

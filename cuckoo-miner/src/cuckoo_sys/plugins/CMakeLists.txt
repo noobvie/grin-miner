@@ -95,8 +95,9 @@ build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_31 "${NOAVX2} -DN
 # (vs ~90 GB for a mean solver) so it is the one CPU path that fits a 36 GB box.
 # Slow, but correct: the cuckoo source supports EDGEBITS=32 (NEDGES is 64-bit;
 # graph.hpp carries an explicit "matches last edge when EDGEBITS==32" note, and
-# lean.hpp has a NONPART_BITS==32 guard). NSIPHASH=4 is the scalar siphash path
-# (no AVX/NEON intrinsics), so it builds unchanged on both x86 and arm64.
+# lean.hpp has a NONPART_BITS==32 guard). NSIPHASH here is ${LEAN_NSIPHASH}: 1 on
+# arm64 (scalar siphash, no intrinsics) and 4 on x86 (SSE2, always present), so
+# this one target line builds correctly on both.
 build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_32 "${NOAVX2} -DNSIPHASH=${LEAN_NSIPHASH} -DATOMIC -DEDGEBITS=32")
 # avx2 variant is x86-only (NSIPHASH=8 uses SSE/AVX); skip on Apple Silicon.
 if (NOT MINER_ARM64)
