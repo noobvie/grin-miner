@@ -4,10 +4,12 @@
 
 A standalone mining implementation intended for mining Grin against a running Grin node.
 
-> **⛏️ Mining on a Mac (Apple Silicon: M1/M2/M3/M4)?**
-> This fork adds a CPU **Cuckatoo32 lean** plugin and a beginner step-by-step guide
-> for CPU-mining Grin **testnet** to a pool on Apple Silicon.
-> 👉 See **[`macos-arm64/README-m4-testnet.md`](macos-arm64/README-m4-testnet.md)**.
+> **⛏️ New to mining? Beginner testnet guides added by this fork:**
+>
+> - **Mac (Apple Silicon: M1/M2/M3/M4)** — CPU-mine Grin testnet to a pool using this fork's
+>   **Cuckatoo32 lean** plugin. 👉 **[`macos-arm64/README-m4-testnet.md`](macos-arm64/README-m4-testnet.md)**
+> - **Windows 10/11** — mine Grin testnet to a pool via **WSL2** (the supported Linux build),
+>   on **GPU** (NVIDIA CUDA) or **CPU**. 👉 **[`windows-x64/README-windows-testnet.md`](windows-x64/README-windows-testnet.md)**
 
 ## Supported Platforms
 
@@ -24,6 +26,12 @@ At present, only mining plugins for linux-x86_64 and MacOS exist. This will like
 And a [running Grin node](https://github.com/mimblewimble/grin/blob/master/doc/build.md) to mine into!
 
 ## Build steps
+
+> These are the **generic upstream** build steps for experienced users on Linux. They clone
+> vanilla `mimblewimble/grin-miner`, which does **not** include this fork's Cuckatoo32 lean CPU
+> plugin. **New to mining, or on a Mac/Windows?** Use the beginner guides linked at the top of
+> this README instead — they install the prerequisites, clone this fork, and walk you all the
+> way to submitting pool shares.
 
 ```sh
 git clone https://github.com/mimblewimble/grin-miner.git
@@ -92,4 +100,8 @@ running grin-miner.
 
 # Using grin-miner
 
-There is a [Grin forum post](https://www.grin-forum.org/t/how-to-mine-cuckoo-30-in-grin-help-us-test-and-collect-stats/152) with further detail on how to configure grin-miner and mine grin's testnet.
+See the [Grin forum](https://forum.grin.mw) and the [official docs](https://docs.grin.mw) for
+further detail on configuring grin-miner and mining Grin's testnet.
+
+**Brand new to this?** The beginner guides above walk through the whole flow end to end:
+[macOS (Apple Silicon)](macos-arm64/README-m4-testnet.md) · [Windows (WSL2)](windows-x64/README-windows-testnet.md).
