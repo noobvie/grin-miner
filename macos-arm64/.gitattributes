@@ -1,0 +1,4 @@
+# These run on macOS/Linux — keep LF so bash doesn't choke on CRLF ("bad interpreter").
+*.sh   text eol=lf
+*.toml text eol=lf
+*.md   text eol=lf

@@ -8,9 +8,30 @@ set (OPT "-O3")
 set (DOPT "-DPREFETCH")
 
 set (FLAGS "-Wno-format -Wno-deprecated-declarations -D_POSIX_C_SOURCE=200112L ${OPT} ${DOPT} -I. ${CPPFLAGS} -pthread")
-set (GPP_FLAGS "-march=native -m64 ${FLAGS}")
+
+# ---- arch detection: Apple Silicon / arm64 vs x86_64 ------------------------
+# Added to support a CPU lean Cuckatoo32 plugin on macOS M-series (arm64).
+# The upstream flags below are x86-only: -march=native/-m64 and the per-target
+# -mno-avx2 / -mavx2 are rejected by clang on arm64. We swap them for the arm64
+# equivalents and (further down) skip the x86-SIMD targets on Apple Silicon.
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+	set (MINER_ARM64 TRUE)
+	set (ARCH_FLAGS "-mcpu=native")   # arm64: no -march=native / -m64
+	set (NOAVX2 "")                   # x86-only flag -> empty on arm64
+	message (STATUS "CuckooMinerPlugins: building for Apple Silicon / arm64 (lean CPU targets only)")
+else()
+	set (MINER_ARM64 FALSE)
+	set (ARCH_FLAGS "-march=native -m64")
+	set (NOAVX2 "-mno-avx2")
+endif()
+
+set (GPP_FLAGS "${ARCH_FLAGS} ${FLAGS}")
 set (CFLAGS "-Wno-format -fomit-frame-pointer ${OPT}")
-set (GCC_FLAGS "-m64 -std=gnu11 ${CFLAGS}")
+if (MINER_ARM64)
+	set (GCC_FLAGS "-std=gnu11 ${CFLAGS}")
+else()
+	set (GCC_FLAGS "-m64 -std=gnu11 ${CFLAGS}")
+endif()
 
 set (CUDA_HOST_COMPILER_OVERRIDE $ENV{CUDA_HOST_COMPILER})
 set (SKIP_CUCKATOO_GPU $ENV{SKIP_CUCKATOO_GPU})
@@ -61,9 +82,20 @@ set (AT_LEAN_CPU_SRC
 			cuckoo/src/cuckatoo/lean.cpp
 			${BLAKE_2B})
 
-build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_19 "-mno-avx2 -DNSIPHASH=4 -DATOMIC -DEDGEBITS=19")
-build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_31 "-mno-avx2 -DNSIPHASH=4 -DATOMIC -DEDGEBITS=31")
-build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_avx2_31 "-mavx2 -DNSIPHASH=8 -DATOMIC -DEDGEBITS=31")
+build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_19 "${NOAVX2} -DNSIPHASH=4 -DATOMIC -DEDGEBITS=19")
+build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_31 "${NOAVX2} -DNSIPHASH=4 -DATOMIC -DEDGEBITS=31")
+# --- C32 lean CPU plugin (ADDED) --------------------------------------------
+# Cuckatoo32 is the network's only live PoW. The lean solver needs ~1 GB RAM
+# (vs ~90 GB for a mean solver) so it is the one CPU path that fits a 36 GB box.
+# Slow, but correct: the cuckoo source supports EDGEBITS=32 (NEDGES is 64-bit;
+# graph.hpp carries an explicit "matches last edge when EDGEBITS==32" note, and
+# lean.hpp has a NONPART_BITS==32 guard). NSIPHASH=4 is the scalar siphash path
+# (no AVX/NEON intrinsics), so it builds unchanged on both x86 and arm64.
+build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_32 "${NOAVX2} -DNSIPHASH=4 -DATOMIC -DEDGEBITS=32")
+# avx2 variant is x86-only (NSIPHASH=8 uses SSE/AVX); skip on Apple Silicon.
+if (NOT MINER_ARM64)
+	build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_avx2_31 "-mavx2 -DNSIPHASH=8 -DATOMIC -DEDGEBITS=31")
+endif()
 
 ### AT MEAN CPU TARGETS  #########################################
 
@@ -78,10 +110,14 @@ set (AT_MEAN_CPU_SRC
 			cuckoo/src/cuckatoo/mean.cpp
 			${BLAKE_2B})
 
-build_cpu_target("${AT_MEAN_CPU_SRC}" cuckatoo_mean_cpu_compat_19 "-mno-avx2 -DXBITS=2 -DNSIPHASH=4 -DSAVEEDGES -DEDGEBITS=19")
-build_cpu_target("${AT_MEAN_CPU_SRC}" cuckatoo_mean_cpu_avx2_19 "-mavx2 -DXBITS=2 -DNSIPHASH=8 -DSAVEEDGES -DEDGEBITS=19")
-build_cpu_target("${AT_MEAN_CPU_SRC}" cuckatoo_mean_cpu_compat_31 "-mno-avx2 -DXBITS=8 -DNSIPHASH=4 -DEXPANDROUND=8 -DCOMPRESSROUND=22 -DSAVEEDGES -DEDGEBITS=31")
-build_cpu_target("${AT_MEAN_CPU_SRC}" cuckatoo_mean_cpu_avx2_31 "-mavx2 -DXBITS=8 -DNSIPHASH=8 -DEXPANDROUND=8 -DCOMPRESSROUND=22 -DSAVEEDGES -DEDGEBITS=31")
+# Mean CPU solvers are x86-SIMD (XBITS bucketing + AVX siphash) and memory-heavy;
+# not built on Apple Silicon (use the lean CPU plugin there instead).
+if (NOT MINER_ARM64)
+	build_cpu_target("${AT_MEAN_CPU_SRC}" cuckatoo_mean_cpu_compat_19 "-mno-avx2 -DXBITS=2 -DNSIPHASH=4 -DSAVEEDGES -DEDGEBITS=19")
+	build_cpu_target("${AT_MEAN_CPU_SRC}" cuckatoo_mean_cpu_avx2_19 "-mavx2 -DXBITS=2 -DNSIPHASH=8 -DSAVEEDGES -DEDGEBITS=19")
+	build_cpu_target("${AT_MEAN_CPU_SRC}" cuckatoo_mean_cpu_compat_31 "-mno-avx2 -DXBITS=8 -DNSIPHASH=4 -DEXPANDROUND=8 -DCOMPRESSROUND=22 -DSAVEEDGES -DEDGEBITS=31")
+	build_cpu_target("${AT_MEAN_CPU_SRC}" cuckatoo_mean_cpu_avx2_31 "-mavx2 -DXBITS=8 -DNSIPHASH=8 -DEXPANDROUND=8 -DCOMPRESSROUND=22 -DSAVEEDGES -DEDGEBITS=31")
+endif()
 
 ### AT LEAN CUDA TARGETS  #########################################
 
@@ -126,10 +162,14 @@ set (AR_CPU_SRC
 
 ### AR CPU TARGETS #########################################
 
-build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_19 "-mno-avx2 -DXBITS=2 -DNSIPHASH=4 -DEDGEBITS=19 -DSAVEEDGES")
-build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_avx2_19 "-mavx2 -DXBITS=2 -DNSIPHASH=8 -DEDGEBITS=19 -DSAVEEDGES")
-build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_29 "-mno-avx2 -DNSIPHASH=4 -DEDGEBITS=29 -DSAVEEDGES")
-build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_avx2_29 "-mavx2 -DNSIPHASH=8 -DEDGEBITS=29 -DSAVEEDGES")
+# Cuckaroo* (ASIC-resistant) PoWs were removed from Grin at HF4 (Jan 2021) and
+# are x86-SIMD anyway; not built on Apple Silicon.
+if (NOT MINER_ARM64)
+	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_19 "-mno-avx2 -DXBITS=2 -DNSIPHASH=4 -DEDGEBITS=19 -DSAVEEDGES")
+	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_avx2_19 "-mavx2 -DXBITS=2 -DNSIPHASH=8 -DEDGEBITS=19 -DSAVEEDGES")
+	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_29 "-mno-avx2 -DNSIPHASH=4 -DEDGEBITS=29 -DSAVEEDGES")
+	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_avx2_29 "-mavx2 -DNSIPHASH=8 -DEDGEBITS=29 -DSAVEEDGES")
+endif()
 
 ### AR CUDA TARGETS #########################################
 
@@ -159,10 +199,13 @@ set (AR2_CPU_SRC
 
 ### AR CPU TARGETS #########################################
 
-build_cpu_target("${AR2_CPU_SRC}" cuckarood_cpu_compat_19 "-mno-avx2 -DXBITS=2 -DNSIPHASH=4 -DEDGEBITS=19 -DSAVEEDGES")
-build_cpu_target("${AR2_CPU_SRC}" cuckarood_cpu_avx2_19 "-mavx2 -DXBITS=2 -DNSIPHASH=8 -DEDGEBITS=19 -DSAVEEDGES")
-build_cpu_target("${AR2_CPU_SRC}" cuckarood_cpu_compat_29 "-mno-avx2 -DNSIPHASH=4 -DEDGEBITS=29 -DSAVEEDGES")
-build_cpu_target("${AR2_CPU_SRC}" cuckarood_cpu_avx2_29 "-mavx2 -DNSIPHASH=8 -DEDGEBITS=29 -DSAVEEDGES")
+# Cuckarood (ASIC-resistant) — removed from Grin at HF4; x86-SIMD; skip on arm64.
+if (NOT MINER_ARM64)
+	build_cpu_target("${AR2_CPU_SRC}" cuckarood_cpu_compat_19 "-mno-avx2 -DXBITS=2 -DNSIPHASH=4 -DEDGEBITS=19 -DSAVEEDGES")
+	build_cpu_target("${AR2_CPU_SRC}" cuckarood_cpu_avx2_19 "-mavx2 -DXBITS=2 -DNSIPHASH=8 -DEDGEBITS=19 -DSAVEEDGES")
+	build_cpu_target("${AR2_CPU_SRC}" cuckarood_cpu_compat_29 "-mno-avx2 -DNSIPHASH=4 -DEDGEBITS=29 -DSAVEEDGES")
+	build_cpu_target("${AR2_CPU_SRC}" cuckarood_cpu_avx2_29 "-mavx2 -DNSIPHASH=8 -DEDGEBITS=29 -DSAVEEDGES")
+endif()
 
 ### AR CUDA TARGETS #########################################
 

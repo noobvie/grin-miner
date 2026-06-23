@@ -1,0 +1,72 @@
+# =============================================================================
+# grin-miner config — Apple Silicon CPU lean miner -> Grin TESTNET public pool
+#
+# Usage: copy this to the repo root as ./grin-miner.toml (grin-miner looks in
+# the working dir and next to the executable), edit the two TODO lines, run:
+#     ./target/release/grin-miner
+#
+# This config uses the C32 lean CPU plugin (cuckatoo_lean_cpu_compat_32) added
+# by the CMakeLists patch. ~1 GB RAM, slow, but it is the CPU path that fits a
+# 36 GB box and submits REAL Cuckatoo32 shares on testnet's low difficulty.
+# =============================================================================
+
+#########################################
+### LOGGING CONFIGURATION             ###
+#########################################
+[logging]
+log_to_stdout = true
+stdout_log_level = "Info"        # bump to "Debug" if the pool connection misbehaves
+log_to_file = true
+file_log_level = "Debug"
+log_file_path = "grin-miner.log"
+log_file_append = true
+
+#########################################
+### MINING CLIENT CONFIGURATION       ###
+#########################################
+[mining]
+
+# Show the terminal UI. Set false to just stream log lines (handy over SSH / for
+# capturing output to share). The miner works either way.
+run_tui = true
+
+# ---- TODO 1: your testnet pool's PUBLIC stratum endpoint --------------------
+# Testnet public-pool stratum default port is 13333 (mainnet would be 3333).
+# Use the host miners connect to (your pool domain or a regional gateway).
+stratum_server_addr = "YOUR_POOL_HOST:13333"
+
+# ---- TODO 2: address-as-identity login -------------------------------------
+# The pool is 2miners-style: the stratum USERNAME is  <grin_address>.<worker>.
+# On testnet the address starts with "tgrin1...". The worker name is anything.
+# Password is ignored by the pool but must be present.
+stratum_server_login    = "tgrin1youraddresshere.m4worker"
+stratum_server_password = "x"
+
+# Plain TCP stratum (the toolkit pool terminates TLS at nginx for HTTPS only;
+# the stratum port itself is plain TCP). Leave false.
+stratum_server_tls_enabled = false
+
+# Where grin-miner looks for *.cuckooplugin. With a normal `cargo build --release`
+# the plugins land in target/release/plugins, which is the default search path,
+# so this is usually left commented. Uncomment + set an absolute path only if you
+# moved the binary away from its target/ tree.
+#miner_plugin_dir = "/absolute/path/to/grin-miner/target/release/plugins"
+
+###############################################################
+### SOLVER PLUGIN — C32 LEAN CPU (Apple Silicon)            ###
+###############################################################
+
+# The only enabled solver: lean Cuckatoo32 on CPU.
+#   - matches the job's edge_bits = 32 (the live network PoW)
+#   - ~1 GB RAM (vs ~90 GB for a mean solver)
+#   - slow, but correct; fine for testnet share submission / pool testing
+[[mining.miner_plugin_config]]
+plugin_name = "cuckatoo_lean_cpu_compat_32"
+[mining.miner_plugin_config.parameters]
+# Thread count for the lean trimmer. Start at (physical cores - 1) to leave the
+# machine responsive; e.g. 8 on an M4 Max (12-core). More threads != linear gain
+# for the lean solver — tune by watching graphs/sec in the TUI.
+nthreads = 8
+# Optional: number of trimming rounds. Default in the solver is fine; only set
+# this if you are deliberately experimenting.
+#ntrims = 256
