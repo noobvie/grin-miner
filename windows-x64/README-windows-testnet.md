@@ -23,8 +23,11 @@ Open **PowerShell as Administrator** (Start → type "PowerShell" → right-clic
 administrator) and run:
 
 ```powershell
-wsl --install -d Ubuntu
+wsl --install -d Ubuntu-24.04
 ```
+
+We pin **Ubuntu 24.04 LTS** (rather than the generic `-d Ubuntu` alias) so every tester
+lands on the same supported version. See `wsl --list --online` for all available distros.
 
 Reboot if prompted. When Ubuntu first launches it asks you to create a username +
 password (this is your Linux login — remember the password, you'll need it for `sudo`).
