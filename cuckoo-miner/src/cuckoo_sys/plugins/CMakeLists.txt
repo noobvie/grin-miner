@@ -18,11 +18,17 @@ if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
 	set (MINER_ARM64 TRUE)
 	set (ARCH_FLAGS "-mcpu=native")   # arm64: no -march=native / -m64
 	set (NOAVX2 "")                   # x86-only flag -> empty on arm64
-	message (STATUS "CuckooMinerPlugins: building for Apple Silicon / arm64 (lean CPU targets only)")
+	# siphashxN.h only has SIMD impls for NSIPHASH 2/4/8/16 (SSE2/AVX2); arm64
+	# has neither, so use NSIPHASH=1 -> the scalar keys->siphash24() path. (The
+	# unconditional <immintrin.h> include in that header is patched out for arm64
+	# by macos-arm64/apply-arm64-patches.sh, run from the build/benchmark scripts.)
+	set (LEAN_NSIPHASH 1)
+	message (STATUS "CuckooMinerPlugins: building for Apple Silicon / arm64 (lean CPU targets only, scalar siphash)")
 else()
 	set (MINER_ARM64 FALSE)
 	set (ARCH_FLAGS "-march=native -m64")
 	set (NOAVX2 "-mno-avx2")
+	set (LEAN_NSIPHASH 4)             # x86-64 always has SSE2 -> 4-way siphash
 endif()
 
 set (GPP_FLAGS "${ARCH_FLAGS} ${FLAGS}")
@@ -82,8 +88,8 @@ set (AT_LEAN_CPU_SRC
 			cuckoo/src/cuckatoo/lean.cpp
 			${BLAKE_2B})
 
-build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_19 "${NOAVX2} -DNSIPHASH=4 -DATOMIC -DEDGEBITS=19")
-build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_31 "${NOAVX2} -DNSIPHASH=4 -DATOMIC -DEDGEBITS=31")
+build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_19 "${NOAVX2} -DNSIPHASH=${LEAN_NSIPHASH} -DATOMIC -DEDGEBITS=19")
+build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_31 "${NOAVX2} -DNSIPHASH=${LEAN_NSIPHASH} -DATOMIC -DEDGEBITS=31")
 # --- C32 lean CPU plugin (ADDED) --------------------------------------------
 # Cuckatoo32 is the network's only live PoW. The lean solver needs ~1 GB RAM
 # (vs ~90 GB for a mean solver) so it is the one CPU path that fits a 36 GB box.
@@ -91,7 +97,7 @@ build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_31 "${NOAVX2} -DN
 # graph.hpp carries an explicit "matches last edge when EDGEBITS==32" note, and
 # lean.hpp has a NONPART_BITS==32 guard). NSIPHASH=4 is the scalar siphash path
 # (no AVX/NEON intrinsics), so it builds unchanged on both x86 and arm64.
-build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_32 "${NOAVX2} -DNSIPHASH=4 -DATOMIC -DEDGEBITS=32")
+build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_compat_32 "${NOAVX2} -DNSIPHASH=${LEAN_NSIPHASH} -DATOMIC -DEDGEBITS=32")
 # avx2 variant is x86-only (NSIPHASH=8 uses SSE/AVX); skip on Apple Silicon.
 if (NOT MINER_ARM64)
 	build_cpu_target("${AT_LEAN_CPU_SRC}" cuckatoo_lean_cpu_avx2_31 "-mavx2 -DNSIPHASH=8 -DATOMIC -DEDGEBITS=31")

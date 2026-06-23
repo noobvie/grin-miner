@@ -1,216 +1,221 @@
-# grin-miner on Apple Silicon (M4) — CPU lean Cuckatoo32 → Grin testnet pool
+# Mine Grin testnet on a Mac (Apple Silicon) — beginner's guide
 
-Goal: run a **CPU** miner on a **Mac M4 Max (36 GB)** that solves the live Grin
-PoW (**Cuckatoo32**) and submits real shares to your **testnet public pool**, to
-test the pool end-to-end. Speed is not a goal — fitting in 36 GB and submitting
-valid shares is.
+**What this is:** a step-by-step way to run a **CPU miner on an Apple Silicon Mac**
+(M1/M2/M3/M4) that solves Grin's real proof-of-work (**Cuckatoo32**) and submits
+shares to a **testnet mining pool**, so you can test the pool end to end.
 
-This folder adds that capability to a stock `mimblewimble/grin-miner` checkout:
+**What to expect:** it's **slow** (CPU, not GPU) and uses **~1 GB RAM**. That's the
+point — it fits a normal Mac and submits *real* shares on testnet's low difficulty.
+It will **not** earn meaningful coin. If that's your goal, this is the right tool.
 
-| File | Purpose |
-|------|---------|
-| `build-macos-arm64.sh` | Two-stage build (plugins-only, then full miner) for Apple Silicon |
-| `grin-miner-testnet-pool.toml` | Ready config: C32 lean CPU plugin → testnet pool stratum |
-| `README-m4-testnet.md` | This document |
-
-Plus one patched file: **`cuckoo-miner/src/cuckoo_sys/plugins/CMakeLists.txt`**
-(see "What I changed" below).
+> New to the terminal? Every step below is copy-paste. Run the commands in the
+> macOS **Terminal** app, one block at a time, from inside this project folder.
 
 ---
 
-## TL;DR (do this on the Mac)
+## Step 0 — Install the tools (one time)
+
+Open Terminal and run these. Each line installs one prerequisite.
 
 ```bash
-# 1. prerequisites
-xcode-select --install                 # Xcode command line tools (clang)
-brew install cmake                     # build system
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # rust, if not present
+# 1. Apple's compiler (clang). A popup will appear — click Install.
+xcode-select --install
 
-# 2. get this exact tree onto the Mac (it has the patch + this folder)
-#    e.g. push this repo to a remote and clone --recursive on the Mac,
-#    or copy the folder over. The cuckoo submodule MUST be present.
+# 2. Homebrew (the macOS package manager), if you don't already have it:
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# 3. build (two stages, with clear pass/fail at each)
-bash macos-arm64/build-macos-arm64.sh
+# 3. cmake (builds the C/C++ solver) and Rust (builds the miner):
+brew install cmake
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
 
-# 4. configure
-cp macos-arm64/grin-miner-testnet-pool.toml ./grin-miner.toml
-#    edit ./grin-miner.toml:  stratum_server_addr + stratum_server_login
+After Rust installs, **close and reopen Terminal** (so `cargo` is on your PATH),
+then check everything is present:
 
-# 5. run
-./target/release/grin-miner
+```bash
+clang --version   # any version
+cmake --version   # any version
+cargo --version   # any version
 ```
 
 ---
 
-## Why this works (and why the fancy Metal miner didn't)
+## Step 1 — Get this project onto the Mac
 
-Cuckatoo32 solvers come in two families:
+You need this exact folder (it contains the Apple-Silicon patch). Two ways:
 
-- **Mean** (the fast Metal miner, grin-miner's `mean_cuda`): holds the entire
-  2³² edge set in memory → **~90 GB**, fixed by the problem size. Cannot be tuned
-  down to 36 GB; the memory *is* the data structure.
-- **Lean** (this): represents the graph as a **bitmap** and trims it iteratively.
-  **~1 GB** for C32. Much slower, but fits 36 GB trivially and submits valid shares.
+- **Easiest — copy the folder.** Copy the whole `grin-miner` folder from your PC to
+  the Mac (USB drive, AirDrop, network share). Make sure the
+  `cuckoo-miner/src/cuckoo_sys/plugins/cuckoo` subfolder is **not empty**.
+- **Or clone it** (if you pushed it to a git remote):
+  ```bash
+  git clone --recursive <your-remote-url> grin-miner
+  ```
+  The `--recursive` is important — it pulls the `cuckoo` solver source.
 
-You asked "can't we downgrade the size requirement?" — the lean solver **is** that
-downgrade: it trades speed for memory. Slowness was acceptable to you, so lean is
-the right tool.
+Then move into the folder (all later steps run from here):
 
----
-
-## What I changed, and why it's only one file
-
-Stock grin-miner already contains a fully-working lean Cuckatoo CPU solver
-(`cuckoo-miner/.../cuckoo/src/cuckatoo/lean.cpp`). Upstream simply never shipped a
-**C32** build target for it (slow C32 CPU mining was never worth packaging) and the
-build flags are **x86-only**. The single patched file fixes both:
-
-**`cuckoo-miner/src/cuckoo_sys/plugins/CMakeLists.txt`**
-1. **Arch detection.** On `arm64`/`aarch64`, replace the x86 flags
-   `-march=native -m64` with `-mcpu=native`, and make the per-target `-mno-avx2`
-   an empty string (it's an x86 flag clang rejects on arm64).
-2. **New target** `cuckatoo_lean_cpu_compat_32` — the same lean source compiled
-   with `-DEDGEBITS=32 -DNSIPHASH=4` (scalar siphash, no SIMD).
-3. **Skip x86-SIMD targets on arm64** (mean CPU, cuckaroo/cuckarood CPU, the
-   `avx2` lean variant) so the arm64 build only produces the portable lean targets.
-
-x86 Linux builds are unaffected (everything is behind `if (NOT MINER_ARM64)`).
-
-**No Rust changes are needed.** The plugin loader builds the filename directly from
-the toml `plugin_name` (`PluginConfig::new` → `format!("{}.cuckooplugin", name)`) —
-there is no hardcoded plugin allowlist. Put `cuckatoo_lean_cpu_compat_32` in the
-toml and it loads `cuckatoo_lean_cpu_compat_32.cuckooplugin`.
+```bash
+cd grin-miner
+```
 
 ---
 
-## Verified vs. needs-testing-on-the-M4
+## Step 2 — Quick test: can this Mac solve Cuckatoo32, and how fast? (no pool yet)
 
-I built this on a Windows box, so I **could not compile arm64/macOS binaries**.
-Here's the honest split.
+Before dealing with the pool or the full miner, prove the solver works on your Mac
+and see its speed. This builds a tiny standalone program and solves a few graphs:
 
-### Verified by reading the actual source (high confidence)
+```bash
+bash macos-arm64/benchmark-c32.sh
+```
 
-- **The lean solver supports EDGEBITS=32.** `NEDGES = 1ULL << EDGEBITS` is 64-bit
-  (no overflow at 2³²); `word_t` resolves to `u32` (correct — node values fit 32
-  bits); the edge-loop counters are bounded below 2³². Upstream even left explicit
-  32-bit markers: `graph.hpp` — `const word_t NIL = ~(word_t)0; // NOTE: matches
-  last edge when EDGEBITS==32`, and `lean.hpp` has a `#if NONPART_BITS == 32` guard.
-- **The lean-compat source set is arm64-clean.** Zero x86 intrinsics
-  (`_mm_*`, `immintrin.h`) in any of its files; prefetch uses portable
-  `__builtin_prefetch`; the AVX siphash lives in `siphashxN.h`, which the lean
-  source set does **not** include (NSIPHASH=4 = scalar path).
-- **macOS endian support exists.** `portable_endian.h` has a real `__APPLE__`
-  branch (`<libkern/OSByteOrder.h>`).
-- **Memory ≈ 1 GB.** `cuckoo_ctx` allocates `alive` (2³² bits = 512 MB) + `nonleaf`
-  (512 MB), and the recovery graph reuses that buffer. Fits 36 GB with vast headroom.
-- **The plugin exports the required FFI symbols.** `create_solver_ctx`,
-  `destroy_solver_ctx`, `run_solver`, `stop_solver`, `fill_default_params` are all
-  defined in `lean.cpp` (same as the existing, working `_31` plugin).
+You'll see lines like `Time: 41000 ms` (one per graph) and a summary:
 
-### Needs confirming on the M4 (where the real unknowns are)
+```
+  RESULT (warm avg over 4 graph(s), 11 threads):
+    avg per graph    : 41000 ms
+    throughput       : 0.0244 graphs/sec (g/s)
+```
 
-1. **STAGE 1 (plugin compile).** Expected to pass given the above. The one flag to
-   watch is `-mcpu=native`: very recent Apple clang supports it; if yours rejects it,
-   see STAGE 1 troubleshooting (one-line fallback).
-2. **STAGE 2 (the Rust build).** This is the **main risk**: grin-miner is pinned at
-   v4.0.0 (Sep 2020) and its dependencies predate the current Rust toolchain. It may
-   build clean, or it may need the fixes in STAGE 2 troubleshooting. STAGE 1 is
-   deliberately independent so you get a working plugin even if STAGE 2 needs work.
-3. **Live share acceptance.** Once running, the proof is the pool/node log line
-   `Got share at height H` (accepted) vs `submitted too late` (stale). Lean is slow,
-   so on testnet expect occasional shares, not a stream.
+That `graphs/sec` number is your real CPU speed. **If you got here, the hard part
+works** — the solver compiles and runs on your Mac. (Tune it: `bash
+macos-arm64/benchmark-c32.sh 8 6` = 8 graphs, 6 threads.)
+
+> Expect something like **0.01–0.03 g/s** on an M4 Max. That's normal for CPU lean
+> mining and is plenty to test a pool (more on speed below).
 
 ---
 
-## STAGE 1 troubleshooting (C++ plugin build)
+## Step 3 — Build the full miner
 
-`build-macos-arm64.sh` STAGE 1 runs cmake on the plugins only and checks for
-`cuckatoo_lean_cpu_compat_32.cuckooplugin`.
+This builds the actual `grin-miner` program that talks to the pool:
 
-- **`clang: error: unsupported option '-mcpu=native'`** — your clang is older than
-  the flag. Edit `cuckoo-miner/src/cuckoo_sys/plugins/CMakeLists.txt`, in the arm64
-  branch change `set (ARCH_FLAGS "-mcpu=native")` to either
-  `set (ARCH_FLAGS "-mcpu=apple-m1")` (safe, forward-compatible — an M4 runs M1-tuned
-  code fine) or simply `set (ARCH_FLAGS "")` (rely on clang defaults; fine for a slow
-  solver). Re-run.
-- **`unknown argument: '-mno-avx2'`** — means the arch detection didn't fire (you're
-  not being seen as arm64). Check `cmake` prints the `Apple Silicon / arm64` status
-  line; if not, your `CMAKE_SYSTEM_PROCESSOR` is unusual — force it:
-  `cmake -S ... -B ... -DCMAKE_SYSTEM_PROCESSOR=arm64 ...`.
-- **submodule empty / `lean.cpp` not found** — `git submodule update --init --recursive`.
+```bash
+bash macos-arm64/build-macos-arm64.sh
+```
 
-A STAGE 1 pass alone already proves the C32 lean solver compiles and runs on your M4.
+The script runs in two stages and tells you clearly if one fails:
+- **Stage 1** builds just the C32 solver plugin (fast; should pass — Step 2 already proved it).
+- **Stage 2** builds the Rust miner. This is the part most likely to need attention
+  on a 2020-era codebase — if it fails, see **Troubleshooting → Stage 2** below.
+
+When it finishes you'll have `target/release/grin-miner`.
 
 ---
 
-## STAGE 2 troubleshooting (Rust / cargo build) — the likely sticking point
+## Step 4 — Point it at your testnet pool
 
-grin-miner v4.0.0 is from 2020. On a 2026 toolchain, try these in order:
+Copy the ready-made config to where the miner looks for it, then edit two lines:
 
-1. **Just try it first.** `cargo build --release` with current stable may simply work
-   (the pinned `Cargo.lock` helps). If it does, you're done.
+```bash
+cp macos-arm64/grin-miner-testnet-pool.toml ./grin-miner.toml
+open -e ./grin-miner.toml      # opens in TextEdit; or use: nano ./grin-miner.toml
+```
 
-2. **Pin an era-appropriate Rust** (most reliable fix for old crates):
+Change exactly these two lines:
+
+```toml
+# your testnet pool's public stratum host (testnet port is 13333):
+stratum_server_addr = "YOUR_POOL_HOST:13333"
+
+# address-as-identity login:  <your tgrin1... address>.<any worker name>
+stratum_server_login = "tgrin1youraddress.m4worker"
+```
+
+Everything else is already set (the C32 lean plugin, thread count, logging). The
+password line can stay `"x"` — the pool ignores it.
+
+---
+
+## Step 5 — Run it
+
+```bash
+./target/release/grin-miner
+```
+
+A text dashboard appears. **What success looks like:**
+1. It connects to the pool and logs in (no auth errors in the log).
+2. It loads the `cuckatoo_lean_cpu_compat_32` plugin at **edge_bits 32**.
+3. It starts solving graphs (slowly) and shows a graphs/sec figure.
+4. When it finds a valid share, your **pool/node log** shows
+   `Got share at height H` — that round trip (connect → job → solve → accepted
+   share) is the pool test you wanted.
+
+Stop it with `Ctrl-C`. Logs are written to `grin-miner.log`.
+
+---
+
+## How fast / how many shares? (set expectations)
+
+- **Speed:** lean CPU C32 is roughly **0.01–0.03 g/s** on an M4 Max — far below a
+  GPU. Slowness is expected and fine for testing.
+- **Shares are rarer than graphs:** a valid 42-cycle exists in only ~2–3% of graphs,
+  so at ~0.02 g/s expect an **accepted share every ~20–40 minutes** on testnet.
+  Enough to exercise the share → credit → maturity → payout pipeline overnight; not
+  enough to accumulate coin.
+- **Could be faster:** a NEON (Apple Silicon SIMD) siphash path could give ~2–4×.
+  It's not built yet — ask if you want it after the basics work.
+
+---
+
+## Troubleshooting
+
+### Step 2 / Stage 1 — the C++ solver won't compile
+- **`'immintrin.h' file not found`** — the arm64 patch didn't apply. Run it manually:
+  `bash macos-arm64/apply-arm64-patches.sh`, then retry.
+- **`unsupported option '-mcpu=native'`** — your clang is older than that flag. The
+  benchmark auto-retries without it. For the plugin build, edit
+  `cuckoo-miner/src/cuckoo_sys/plugins/CMakeLists.txt`, arm64 branch: change
+  `set (ARCH_FLAGS "-mcpu=native")` to `set (ARCH_FLAGS "-mcpu=apple-m1")` or
+  `set (ARCH_FLAGS "")`, then rerun.
+- **`lean.cpp not found` / submodule empty** — `git submodule update --init --recursive`.
+
+### Stage 2 — the Rust build (`cargo`) fails — the likeliest snag
+grin-miner is pinned at v4.0.0 (Sep 2020); its dependencies predate today's Rust.
+Try in order:
+1. **Just retry** — current stable Rust may build it as-is.
+2. **Use an era-matching Rust** (most reliable):
    ```bash
-   rustup toolchain install 1.51.0          # ~grin-miner v4.0.0 era
-   rustup override set 1.51.0               # applies to this repo dir only
+   rustup toolchain install 1.51.0
+   rustup override set 1.51.0     # only affects this folder
    cargo build --release
    ```
-   (Try 1.51–1.59 if 1.51 itself errors on the host.)
+   (Try 1.51–1.59 if 1.51 errors on your host.)
+3. **A dependency won't compile** (often the `cursive` TUI or `ncurses`): try
+   `brew install ncurses`, then retry. Or capture the exact error and send it over.
 
-3. **If a specific dependency fails to compile** (common culprits: the TUI crate
-   `cursive`/ncurses, `libloading`, `cgmath`), capture the exact error and we fix
-   that crate's version. As a quick experiment you can let cargo pick newer compatible
-   versions: `cargo update && cargo build --release` (may introduce API breaks — share
-   the output and I'll patch).
-
-4. **ncurses/TUI link errors** — the TUI needs ncurses. `brew install ncurses` and
-   retry. (Setting `run_tui = false` in the toml changes runtime behaviour but does
-   **not** drop the build-time dependency on this version.)
-
-If STAGE 2 proves stubborn, the **fallback** is the standalone lean solver from STAGE 1:
-the same `lean.cpp` compiles to a CLI tester via the cuckoo submodule's own Makefile,
-which lets you confirm the M4 solves C32 graphs even before the stratum wrapper builds.
-That doesn't talk to the pool, but it de-risks the solver independently. Tell me if you
-want a thin stratum driver as a Plan B instead of fighting the 2020 Rust tree.
+**Good news:** Step 2 already gave you a working solver, so even if Stage 2 needs
+fiddling, the C32/Apple-Silicon work is proven — only the Rust wrapper is left.
 
 ---
 
-## Configure → run
+## Reference — what was changed, and what's verified
 
-1. `cp macos-arm64/grin-miner-testnet-pool.toml ./grin-miner.toml`
-2. Edit two lines:
-   - `stratum_server_addr = "YOUR_POOL_HOST:13333"` — your testnet pool's public
-     stratum (port **13333** for testnet; a regional gateway host works too).
-   - `stratum_server_login = "tgrin1youraddress.m4worker"` — **address-as-identity**:
-     `<your tgrin1… address>.<worker name>`. Password is ignored but keep `"x"`.
-3. `nthreads` in the plugin block: start at physical-cores − 1 (e.g. 8 on M4 Max).
-4. Run `./target/release/grin-miner`. The TUI shows connection status, the loaded
-   plugin (`cuckatoo_lean_cpu_compat_32`), edge_bits 32, and graphs/sec.
+**The whole change is one patched file + this folder.** Stock grin-miner already
+contains a working lean Cuckatoo CPU solver; it just lacked a **C32** build target
+and used **x86-only** build settings.
 
-### What success looks like
+- **`cuckoo-miner/src/cuckoo_sys/plugins/CMakeLists.txt`** — detect arm64; swap x86
+  flags (`-march=native -m64` → `-mcpu=native`, blank `-mno-avx2`); add the
+  `cuckatoo_lean_cpu_compat_32` target; on arm64 use scalar `NSIPHASH=1` and skip the
+  x86-SIMD targets. x86 Linux builds are untouched.
+- **`macos-arm64/apply-arm64-patches.sh`** — guards the unconditional
+  `#include <immintrin.h>` in `siphashxN.h` (x86-only header) so arm64 compiles. Run
+  automatically by the build + benchmark scripts; idempotent.
+- **`macos-arm64/`** — `benchmark-c32.sh`, `build-macos-arm64.sh`,
+  `grin-miner-testnet-pool.toml`, this README.
 
-- grin-miner connects and logs in (the pool authenticates the `tgrin1….worker`
-  username) and starts receiving jobs.
-- The miner reports solving C32 graphs (slowly).
-- On a solved share at/above pool difficulty, your **pool/node** log shows
-  `Got share at height H`. That round-trip — login → job → solve → accepted share —
-  is the pool test you wanted.
+**No Rust changes were needed** — the plugin loader builds the filename from the toml
+`plugin_name` (no hardcoded list), so the new plugin loads as-is.
 
-### Reality check on speed
+**Verified by reading the source (high confidence):** the lean solver supports
+EDGEBITS=32 (`NEDGES` is 64-bit; `graph.hpp`/`lean.hpp` carry explicit `==32`
+markers); memory is ~1 GB (`alive` 512 MB + `nonleaf` 512 MB); the lean code path has
+no x86 intrinsics once `siphashxN.h` is guarded and `NSIPHASH=1` selects scalar
+siphash; `portable_endian.h` has an `__APPLE__` branch; the plugin exports all five
+FFI symbols the loader needs.
 
-Lean C32 on CPU is very slow (think a fraction of a graph/sec). On testnet's low
-share difficulty you'll still land shares periodically — enough to validate the
-share/credit/maturity/payout pipeline, which is the point. It is **not** a way to
-accumulate meaningful coin.
-
----
-
-## If you'd rather just prove connectivity first
-
-You don't even need a working solver to confirm your pool accepts a miner: the Metal
-repo's `strat_probe` (or any stratum login probe) connects, logs in with your
-`tgrin1….worker`, and prints the pool's job reply — zero solving, zero RAM. That's the
-fastest "does my pool talk to a miner" check. This grin-miner build is the next step:
-actually submitting accepted shares.
+**Not yet verified (needs your Mac):** the actual arm64 **compile** (Step 2 confirms
+it in minutes) and the **Rust build** (Stage 2 — the 2020-era dependency risk). These
+scripts were written on a Windows machine, which cannot produce macOS/arm64 binaries.

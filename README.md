@@ -4,6 +4,11 @@
 
 A standalone mining implementation intended for mining Grin against a running Grin node.
 
+> **⛏️ Mining on a Mac (Apple Silicon: M1/M2/M3/M4)?**
+> This fork adds a CPU **Cuckatoo32 lean** plugin and a beginner step-by-step guide
+> for CPU-mining Grin **testnet** to a pool on Apple Silicon.
+> 👉 See **[`macos-arm64/README-m4-testnet.md`](macos-arm64/README-m4-testnet.md)**.
+
 ## Supported Platforms
 
 At present, only mining plugins for linux-x86_64 and MacOS exist. This will likely change over time as the community creates more solvers for different platforms.
