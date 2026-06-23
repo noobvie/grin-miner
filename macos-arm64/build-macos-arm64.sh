@@ -83,6 +83,37 @@ echo
 # ----------------------------------------------------------------------------
 # STAGE 2 — build the full grin-miner binary (Rust)
 # ----------------------------------------------------------------------------
+# grin-miner is a 2020-era project; on a modern toolchain + Homebrew's OpenSSL 3.x
+# it needs a pinned Rust and two dependency pins BEFORE the first cargo build.
+# These are the exact fixes proven on the Linux/WSL path (README-windows-testnet.md
+# Step 4) — they are platform-independent (pure-Rust dep + OpenSSL 3.x), so a Mac
+# hits the identical errors without them. Applied here automatically.
+#
+#   - Rust 1.69.0: `rustc-serialize` (unmaintained dep) won't compile on current
+#     Rust (error[E0310]). Pinned FIRST so stable never rewrites Cargo.lock to v4
+#     (which 1.69 then can't read).
+#   - openssl 0.10.48 / openssl-sys 0.9.92: the repo's openssl-sys 0.9.58 predates
+#     OpenSSL 3.0 (Homebrew ships 3.x) -> "Failed to find OpenSSL headers"/expando.c
+#     / ERR_put_error. These pins speak OpenSSL 3.x yet still build on Rust 1.69.
+
+if command -v rustup >/dev/null 2>&1; then
+	say "Pinning Rust 1.69.0 for this repo (2020-era deps need it)..."
+	rustup install 1.69.0 >/dev/null 2>&1 || warn "rustup install 1.69.0 failed; continuing with $(rustc --version)"
+	rustup override set 1.69.0 >/dev/null 2>&1 || warn "rustup override set 1.69.0 failed; continuing with $(rustc --version)"
+	# If a prior stable build bumped Cargo.lock to v4, 1.69 can't read it.
+	if grep -q '^version = 4' Cargo.lock 2>/dev/null; then
+		warn "Cargo.lock is v4 (a newer Rust touched it); restoring the committed lockfile."
+		git checkout -- Cargo.lock 2>/dev/null || warn "could not restore Cargo.lock; run: git checkout Cargo.lock"
+	fi
+else
+	warn "rustup not found — cannot pin Rust 1.69.0. If cargo build fails with"
+	warn "'rustc-serialize ... E0310' or a Cargo.lock v4 error, install rustup."
+fi
+
+say "Pinning OpenSSL crates for OpenSSL 3.x compatibility..."
+cargo update -p openssl     --precise 0.10.48 || warn "openssl pin failed (continuing)"
+cargo update -p openssl-sys --precise 0.9.92  || warn "openssl-sys pin failed (continuing)"
+
 say "STAGE 2: building grin-miner (cargo build --release)..."
 say "This re-builds the plugins again via build.rs and links the miner binary."
 if cargo build --release; then

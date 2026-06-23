@@ -24,10 +24,18 @@ xcode-select --install
 # 2. Homebrew (the macOS package manager), if you don't already have it:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# 3. cmake (builds the C/C++ solver) and Rust (builds the miner):
-brew install cmake
+# 3. cmake (builds the C/C++ solver), pkg-config + OpenSSL 3.x (a Rust dep links
+#    against it), and Rust (builds the miner):
+brew install cmake pkg-config openssl@3
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
+
+> **Why OpenSSL here?** one of the miner's Rust deps links OpenSSL. Homebrew's
+> `openssl@3` is *keg-only* (not on the default path), so if the build later can't
+> find it, point it there explicitly and rebuild:
+> ```bash
+> export OPENSSL_DIR="$(brew --prefix openssl@3)"
+> ```
 
 After Rust installs, **close and reopen Terminal** (so `cargo` is on your PATH),
 then check everything is present:
@@ -97,8 +105,11 @@ bash macos-arm64/build-macos-arm64.sh
 
 The script runs in two stages and tells you clearly if one fails:
 - **Stage 1** builds just the C32 solver plugin (fast; should pass — Step 2 already proved it).
-- **Stage 2** builds the Rust miner. This is the part most likely to need attention
-  on a 2020-era codebase — if it fails, see **Troubleshooting → Stage 2** below.
+- **Stage 2** builds the Rust miner. Because this is a 2020-era codebase on a modern
+  toolchain + Homebrew's OpenSSL 3.x, the script **automatically** pins Rust `1.69.0`
+  and the `openssl` / `openssl-sys` crates before building (the same fixes the Linux/WSL
+  path needs — they're platform-independent, so a Mac hits the identical errors without
+  them). If it still fails, see **Troubleshooting → Stage 2** below.
 
 When it finishes you'll have `target/release/grin-miner`.
 
@@ -172,18 +183,21 @@ Stop it with `Ctrl-C`. Logs are written to `grin-miner.log`.
 - **`lean.cpp not found` / submodule empty** — `git submodule update --init --recursive`.
 
 ### Stage 2 — the Rust build (`cargo`) fails — the likeliest snag
-grin-miner is pinned at v4.0.0 (Sep 2020); its dependencies predate today's Rust.
-Try in order:
-1. **Just retry** — current stable Rust may build it as-is.
-2. **Use an era-matching Rust** (most reliable):
-   ```bash
-   rustup toolchain install 1.51.0
-   rustup override set 1.51.0     # only affects this folder
-   cargo build --release
-   ```
-   (Try 1.51–1.59 if 1.51 errors on your host.)
-3. **A dependency won't compile** (often the `cursive` TUI or `ncurses`): try
-   `brew install ncurses`, then retry. Or capture the exact error and send it over.
+grin-miner is v4.0.0 (Sep 2020); its dependencies predate today's Rust **and**
+Homebrew's OpenSSL 3.x. The build script already applies the fixes below
+automatically — this table is for when one still bites (e.g. you ran `cargo build`
+by hand, or `rustup` wasn't installed when the script ran). These are the **same
+fixes proven on the Linux/WSL path**, because the failures are platform-independent.
+
+| Symptom | Cause / fix |
+|---|---|
+| `rustc-serialize` fails: `error[E0310]: the parameter type T may not live long enough` | Current Rust is too new for this old dep. Pin the era toolchain **for this folder**: `rustup install 1.69.0 && rustup override set 1.69.0`, then rebuild. **Use 1.69.0 — not 1.51.** Older toolchains fail other deps; 1.69 is the sweet spot that builds the whole tree. |
+| `lock file version 4 was found ... Cargo needs to be updated` | You built on stable Rust before pinning 1.69, which rewrote `Cargo.lock` to v4. Restore it: `git checkout Cargo.lock`, then re-pin 1.69 (above) and rebuild. The build script restores it for you. |
+| `openssl-sys` build fails: *"Failed to find OpenSSL development headers"* / `expando.c` macro error | The original `openssl-sys 0.9.58` is too old for OpenSSL 3.x (Homebrew ships 3.x). Apply the pins: `cargo update -p openssl --precise 0.10.48 && cargo update -p openssl-sys --precise 0.9.92`. This is the crate, not your headers. |
+| `openssl` fails: `cannot find function ERR_put_error / FIPS_mode / SSL_get_peer_certificate in crate ffi` | Same root cause — the high-level `openssl 0.10.30` is too old for OpenSSL 3.x. Apply both pins above (bump `openssl` *with* its `-sys` crate). |
+| `openssl-sys` still can't find OpenSSL on a Mac | Homebrew's `openssl@3` is keg-only. Point at it: `export OPENSSL_DIR="$(brew --prefix openssl@3)"` (and make sure `pkg-config` is installed — `brew install pkg-config openssl@3`), then rebuild. |
+| `openssl-sys vX cannot be built because it requires rustc 1.80.0 or newer` | A bare `cargo update` pulled too-new an `openssl-sys` for the 1.69 pin. Pin it down: `cargo update -p openssl-sys --precise 0.9.92`. |
+| A dependency won't compile (often the `cursive` TUI / `ncurses`) | `brew install ncurses`, then retry. Or capture the exact error and send it over. |
 
 **Good news:** Step 2 already gave you a working solver, so even if Stage 2 needs
 fiddling, the C32/Apple-Silicon work is proven — only the Rust wrapper is left.
