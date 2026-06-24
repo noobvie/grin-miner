@@ -165,8 +165,11 @@ Stop it with `Ctrl-C`. Logs are written to `grin-miner.log`.
   so at ~0.02 g/s expect an **accepted share every ~20–40 minutes** on testnet.
   Enough to exercise the share → credit → maturity → payout pipeline overnight; not
   enough to accumulate coin.
-- **Could be faster:** a NEON (Apple Silicon SIMD) siphash path could give ~2–4×.
-  It's not built yet — ask if you want it after the basics work.
+- **Speed:** the arm64 build uses a **NEON 4-way siphash** (`NSIPHASH=4`, injected by
+  `apply-arm64-patches.sh`), ~2–4× the old scalar path. `benchmark-c32.sh` verifies the
+  NEON hash matches the scalar hash bit-for-bit before timing, so a mismatch aborts
+  rather than mining bad shares. To force the old scalar path, set `LEAN_NSIPHASH=1` in
+  `CMakeLists.txt`. (The g/s figures above predate NEON; expect them ~2–4× higher.)
 
 ---
 
@@ -212,11 +215,13 @@ and used **x86-only** build settings.
 
 - **`cuckoo-miner/src/cuckoo_sys/plugins/CMakeLists.txt`** — detect arm64; swap x86
   flags (`-march=native -m64` → `-mcpu=native`, blank `-mno-avx2`); add the
-  `cuckatoo_lean_cpu_compat_32` target; on arm64 use scalar `NSIPHASH=1` and skip the
-  x86-SIMD targets. x86 Linux builds are untouched.
-- **`macos-arm64/apply-arm64-patches.sh`** — guards the unconditional
-  `#include <immintrin.h>` in `siphashxN.h` (x86-only header) so arm64 compiles. Run
-  automatically by the build + benchmark scripts; idempotent.
+  `cuckatoo_lean_cpu_compat_32` target; on arm64 use `NSIPHASH=4` (NEON, see below) and
+  skip the x86-SIMD targets. x86 Linux builds are untouched.
+- **`macos-arm64/apply-arm64-patches.sh`** — two idempotent source patches: (1) guards
+  the unconditional `#include <immintrin.h>` in `siphashxN.h` (x86-only header) so arm64
+  compiles; (2) injects a **NEON 2-way/4-way siphash** (`uint64x2_t`) into `siphashxN.h`
+  mirroring the SSE2 `__m128i` path, enabling `NSIPHASH=4` on arm64. Run automatically
+  by the build + benchmark scripts.
 - **`macos-arm64/`** — `benchmark-c32.sh`, `build-macos-arm64.sh`,
   `grin-miner-testnet-pool.toml`, this README.
 
@@ -226,9 +231,14 @@ and used **x86-only** build settings.
 **Verified by reading the source (high confidence):** the lean solver supports
 EDGEBITS=32 (`NEDGES` is 64-bit; `graph.hpp`/`lean.hpp` carry explicit `==32`
 markers); memory is ~1 GB (`alive` 512 MB + `nonleaf` 512 MB); the lean code path has
-no x86 intrinsics once `siphashxN.h` is guarded and `NSIPHASH=1` selects scalar
-siphash; `portable_endian.h` has an `__APPLE__` branch; the plugin exports all five
-FFI symbols the loader needs.
+no x86 intrinsics once `siphashxN.h` is guarded (the NEON `NSIPHASH=4` path uses only
+`<arm_neon.h>`); `portable_endian.h` has an `__APPLE__` branch; the plugin exports all
+five FFI symbols the loader needs.
+
+**Verified at runtime by you (must pass before mining):** `benchmark-c32.sh` compiles
+both the scalar (`NSIPHASH=1`) and NEON (`NSIPHASH=4`) solvers, solves the same nonce
+with each, and aborts unless the deterministic graph output is identical — proving the
+hand-ported NEON siphash is bit-for-bit correct on your hardware.
 
 **Not yet verified (needs your Mac):** the actual arm64 **compile** (Step 2 confirms
 it in minutes) and the **Rust build** (Stage 2 — the 2020-era dependency risk). These

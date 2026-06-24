@@ -48,10 +48,12 @@ if [[ ! -e cuckoo-miner/src/cuckoo_sys/plugins/cuckoo/src/cuckatoo/lean.cpp ]]; 
 	git submodule update --init --recursive || die "git submodule update failed"
 fi
 
-# Apply the arm64 source patch (guards the x86-only <immintrin.h> in siphashxN.h).
-# Idempotent + survives a fresh recursive clone. See apply-arm64-patches.sh.
-say "Applying arm64 source patch..."
-bash "$REPO_ROOT/macos-arm64/apply-arm64-patches.sh" || die "arm64 source patch failed"
+# Apply the arm64 source patches (guards the x86-only <immintrin.h> AND injects
+# the NEON 4-way siphash into siphashxN.h). Idempotent + survives a fresh
+# recursive clone. See apply-arm64-patches.sh. CMakeLists sets NSIPHASH=4 on arm64
+# to use the NEON path; benchmark-c32.sh verifies it matches the scalar hash.
+say "Applying arm64 source patches (immintrin guard + NEON siphash)..."
+bash "$REPO_ROOT/macos-arm64/apply-arm64-patches.sh" || die "arm64 source patches failed"
 
 # ----------------------------------------------------------------------------
 # STAGE 1 — build the C++ plugins only (isolates the CMakeLists patch)

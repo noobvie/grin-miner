@@ -5,3 +5,7 @@ node*
 target
 *.iml
 grin-miner.log
+
+# macos-arm64 standalone benchmark binaries (built by benchmark-c32.sh)
+macos-arm64/lean32_bench
+macos-arm64/lean32_bench_scalar
