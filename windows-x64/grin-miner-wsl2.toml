@@ -1,13 +1,13 @@
 # =============================================================================
-# grin-miner config — Windows (x86_64) -> Grin TESTNET public pool
+# grin-miner config — Windows (x86_64) via WSL2 (Grin testnet by default)
 #
 # Built and run inside WSL2 (Ubuntu). See README-windows-testnet.md — there is
 # NO official native-Windows grin-miner build, so the supported path is WSL2,
 # which reuses the working Linux build for BOTH GPU (CUDA) and CPU (lean C32).
 #
 # Usage (inside your WSL2 shell, from the repo root):
-#   cp windows-x64/grin-miner-testnet-pool.toml ./grin-miner.toml
-#   # edit the two TODO lines + pick ONE solver block below, then:
+#   cp windows-x64/grin-miner-wsl2.toml ./grin-miner.toml
+#   # set stratum_server_addr (node or pool) + pick ONE solver block below, then:
 #   ./target/release/grin-miner
 # =============================================================================
 
@@ -31,20 +31,23 @@ log_file_append = true
 # capturing output to share). The miner works either way.
 run_tui = true
 
-# ---- TODO 1: your testnet pool's PUBLIC stratum endpoint --------------------
-# Testnet public-pool stratum default port is 13333 (mainnet would be 3333).
-# Use the host miners connect to (your pool domain or a regional gateway).
-stratum_server_addr = "YOUR_POOL_HOST:13333"
+# ---- Stratum endpoint -------------------------------------------------------
+# Standard grin-miner usage: mine against YOUR OWN grin node's built-in stratum.
+# Grin's native stratum port is 3416 (mainnet) / 13416 (testnet). Start the node
+# with `enable_stratum_server = true` in grin-server.toml (testnet adds --testnet)
+# and a wallet listening so the node can build the coinbase. The miner then
+# connects to it (use the node's host; 127.0.0.1 if it runs in the same WSL2):
+stratum_server_addr = "127.0.0.1:13416"   # testnet local node (mainnet: 127.0.0.1:3416)
 
-# ---- TODO 2: address-as-identity login -------------------------------------
-# The pool is 2miners-style: the stratum USERNAME is  <grin_address>.<worker>.
-# On testnet the address starts with "tgrin1...". The worker name is anything.
-# Password is ignored by the pool but must be present.
-stratum_server_login    = "tgrin1youraddresshere.winworker"
-stratum_server_password = "x"
+# The node's built-in stratum needs no login. To mine to a POOL instead, point
+# stratum_server_addr at the pool's public host:port and set the login to
+# whatever the pool documents (many Grin pools use address-as-identity, i.e.
+# <grin_address>.<worker_name>). Example:
+#stratum_server_addr     = "pool.example.com:13333"
+#stratum_server_login    = "tgrin1youraddress.worker1"
+#stratum_server_password = "x"
 
-# Plain TCP stratum (the toolkit pool terminates TLS at nginx for HTTPS only;
-# the stratum port itself is plain TCP). Leave false.
+# The node's stratum is plain TCP (no TLS). Leave false.
 stratum_server_tls_enabled = false
 
 # Where grin-miner looks for *.cuckooplugin. A normal `cargo build --release`

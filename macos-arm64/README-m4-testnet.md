@@ -1,12 +1,12 @@
 # Mine Grin testnet on a Mac (Apple Silicon) — beginner's guide
 
 **What this is:** a step-by-step way to run a **CPU miner on an Apple Silicon Mac**
-(M1/M2/M3/M4) that solves Grin's real proof-of-work (**Cuckatoo32**) and submits
-shares to a **testnet mining pool**, so you can test the pool end to end.
+(M1/M2/M3/M4) that solves Grin's real proof-of-work (**Cuckatoo32**) against a
+**testnet node** (or a pool), so you can mine end to end on a Mac.
 
 **What to expect:** it's **slow** (CPU, not GPU) and uses **~1 GB RAM**. That's the
-point — it fits a normal Mac and submits *real* shares on testnet's low difficulty.
-It will **not** earn meaningful coin. If that's your goal, this is the right tool.
+point — it fits a normal Mac and does *real* Cuckatoo32 at testnet's low difficulty.
+It will **not** earn meaningful coin; it's for testing/learning, not profit.
 
 > New to the terminal? Every step below is copy-paste. Run the commands in the
 > macOS **Terminal** app, one block at a time, from inside this project folder.
@@ -69,9 +69,9 @@ cd grin-miner
 
 ---
 
-## Step 2 — Quick test: can this Mac solve Cuckatoo32, and how fast? (no pool yet)
+## Step 2 — Quick test: can this Mac solve Cuckatoo32, and how fast? (standalone)
 
-Before dealing with the pool or the full miner, prove the solver works on your Mac
+Before dealing with a node or the full miner, prove the solver works on your Mac
 and see its speed. This builds a tiny standalone program and solves a few graphs:
 
 ```bash
@@ -97,7 +97,7 @@ macos-arm64/benchmark-c32.sh 8 6` = 8 graphs, 6 threads.)
 
 ## Step 3 — Build the full miner
 
-This builds the actual `grin-miner` program that talks to the pool:
+This builds the actual `grin-miner` program that talks to your node (or a pool):
 
 ```bash
 bash macos-arm64/build-macos-arm64.sh
@@ -115,27 +115,34 @@ When it finishes you'll have `target/release/grin-miner`.
 
 ---
 
-## Step 4 — Point it at your testnet pool
+## Step 4 — Point it at your testnet node (or a pool)
 
-Copy the ready-made config to where the miner looks for it, then edit two lines:
+Copy the ready-made config to where the miner looks for it:
 
 ```bash
-cp macos-arm64/grin-miner-testnet-pool.toml ./grin-miner.toml
+cp macos-arm64/grin-miner-arm64.toml ./grin-miner.toml
 open -e ./grin-miner.toml      # opens in TextEdit; or use: nano ./grin-miner.toml
 ```
 
-Change exactly these two lines:
+By default it mines to a **local testnet node's built-in stratum** — Grin's
+native port `13416` (mainnet `3416`):
 
 ```toml
-# your testnet pool's public stratum host (testnet port is 13333):
-stratum_server_addr = "YOUR_POOL_HOST:13333"
-
-# address-as-identity login:  <your tgrin1... address>.<any worker name>
-stratum_server_login = "tgrin1youraddress.m4worker"
+stratum_server_addr = "127.0.0.1:13416"   # your testnet node (mainnet: 127.0.0.1:3416)
 ```
 
-Everything else is already set (the C32 lean plugin, thread count, logging). The
-password line can stay `"x"` — the pool ignores it.
+This needs a grin node running with `enable_stratum_server = true` (see the Grin
+node docs) and a wallet listening so the node can build the coinbase.
+
+**To mine to a pool instead**, point it at the pool and add the login the pool
+documents (many use address-as-identity, `<grin_address>.<worker>`):
+
+```toml
+stratum_server_addr  = "pool.example.com:13333"
+stratum_server_login = "tgrin1youraddress.worker1"
+```
+
+Everything else is already set (the C32 lean plugin, thread count, logging).
 
 ---
 
@@ -146,25 +153,27 @@ password line can stay `"x"` — the pool ignores it.
 ```
 
 A text dashboard appears. **What success looks like:**
-1. It connects to the pool and logs in (no auth errors in the log).
+1. It connects to your node (or pool) and logs in (no auth errors in the log).
 2. It loads the `cuckatoo_lean_cpu_compat_32` plugin at **edge_bits 32**.
 3. It starts solving graphs (slowly) and shows a graphs/sec figure.
-4. When it finds a valid share, your **pool/node log** shows
-   `Got share at height H` — that round trip (connect → job → solve → accepted
-   share) is the pool test you wanted.
+4. When it finds a valid solution, your **node** logs it (at testnet's low
+   difficulty you'll land actual blocks); against a pool you'll see the share
+   credited instead. That round trip (connect → job → solve → accepted) is the
+   end-to-end test.
 
 Stop it with `Ctrl-C`. Logs are written to `grin-miner.log`.
 
 ---
 
-## How fast / how many shares? (set expectations)
+## How fast / how many solutions? (set expectations)
 
 - **Speed:** lean CPU C32 is roughly **0.01–0.03 g/s** on an M4 Max — far below a
   GPU. Slowness is expected and fine for testing.
-- **Shares are rarer than graphs:** a valid 42-cycle exists in only ~2–3% of graphs,
-  so at ~0.02 g/s expect an **accepted share every ~20–40 minutes** on testnet.
-  Enough to exercise the share → credit → maturity → payout pipeline overnight; not
-  enough to accumulate coin.
+- **Solutions are rarer than graphs:** a valid 42-cycle exists in only ~2–3% of
+  graphs, so at ~0.02 g/s expect a found solution every ~20–40 minutes. On testnet's
+  low difficulty most solutions clear the target, so mining to your own node you'll
+  land real testnet blocks at about that cadence (against a pool it's an accepted
+  share) — enough to exercise the full pipeline overnight, not to accumulate coin.
 - **NEON siphash — verified correct, but barely faster (measured on an M4):** the arm64
   build uses a **NEON 4-way siphash** (`NSIPHASH=4`, injected by `apply-arm64-patches.sh`).
   `benchmark-c32.sh` verifies its output matches the scalar hash bit-for-bit before timing
@@ -229,7 +238,7 @@ and used **x86-only** build settings.
   mirroring the SSE2 `__m128i` path, enabling `NSIPHASH=4` on arm64. Run automatically
   by the build + benchmark scripts.
 - **`macos-arm64/`** — `benchmark-c32.sh`, `build-macos-arm64.sh`,
-  `grin-miner-testnet-pool.toml`, this README.
+  `grin-miner-arm64.toml`, this README.
 
 **No Rust changes were needed** — the plugin loader builds the filename from the toml
 `plugin_name` (no hardcoded list), so the new plugin loads as-is.

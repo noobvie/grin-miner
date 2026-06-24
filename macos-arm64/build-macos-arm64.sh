@@ -124,7 +124,7 @@ if cargo build --release; then
 	echo "    Binary : $REPO_ROOT/target/release/grin-miner"
 	echo "    Plugins: $REPO_ROOT/target/release/plugins/"
 	echo
-	echo "    Next: copy macos-arm64/grin-miner-testnet-pool.toml to ./grin-miner.toml,"
+	echo "    Next: copy macos-arm64/grin-miner-arm64.toml to ./grin-miner.toml,"
 	echo "    edit stratum_server_addr + stratum_server_login, then run:"
 	echo "        ./target/release/grin-miner"
 else

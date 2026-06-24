@@ -1,13 +1,16 @@
 # =============================================================================
-# grin-miner config — Apple Silicon CPU lean miner -> Grin TESTNET public pool
+# grin-miner config — Apple Silicon CPU lean miner (Grin testnet by default)
 #
 # Usage: copy this to the repo root as ./grin-miner.toml (grin-miner looks in
-# the working dir and next to the executable), edit the two TODO lines, run:
+# the working dir and next to the executable), point stratum_server_addr at your
+# node (or a pool) below, then run:
 #     ./target/release/grin-miner
 #
 # This config uses the C32 lean CPU plugin (cuckatoo_lean_cpu_compat_32) added
-# by the CMakeLists patch. ~1 GB RAM, slow, but it is the CPU path that fits a
-# 36 GB box and submits REAL Cuckatoo32 shares on testnet's low difficulty.
+# by this branch's arm64 CMakeLists support. ~1 GB RAM, slow, but it is the CPU
+# path that fits a normal Mac and solves REAL Cuckatoo32 at testnet's low
+# difficulty. (Mainnet works too — just point at a mainnet node/pool on port
+# 3416/3333; CPU lean is far too slow to be useful on mainnet, though.)
 # =============================================================================
 
 #########################################
@@ -30,20 +33,23 @@ log_file_append = true
 # capturing output to share). The miner works either way.
 run_tui = true
 
-# ---- TODO 1: your testnet pool's PUBLIC stratum endpoint --------------------
-# Testnet public-pool stratum default port is 13333 (mainnet would be 3333).
-# Use the host miners connect to (your pool domain or a regional gateway).
-stratum_server_addr = "YOUR_POOL_HOST:13333"
+# ---- Stratum endpoint -------------------------------------------------------
+# Standard grin-miner usage: mine against YOUR OWN grin node's built-in stratum.
+# Grin's native stratum port is 3416 (mainnet) / 13416 (testnet). Start the node
+# with `enable_stratum_server = true` in grin-server.toml (testnet adds --testnet)
+# and a wallet listening so the node can build the coinbase. The miner then
+# connects to it locally:
+stratum_server_addr = "127.0.0.1:13416"   # testnet local node (mainnet: 127.0.0.1:3416)
 
-# ---- TODO 2: address-as-identity login -------------------------------------
-# The pool is 2miners-style: the stratum USERNAME is  <grin_address>.<worker>.
-# On testnet the address starts with "tgrin1...". The worker name is anything.
-# Password is ignored by the pool but must be present.
-stratum_server_login    = "tgrin1youraddresshere.m4worker"
-stratum_server_password = "x"
+# The node's built-in stratum needs no login. To mine to a POOL instead, point
+# stratum_server_addr at the pool's public host:port and set the login to
+# whatever the pool documents (many Grin pools use address-as-identity, i.e.
+# <grin_address>.<worker_name>). Example:
+#stratum_server_addr     = "pool.example.com:13333"
+#stratum_server_login    = "tgrin1youraddress.worker1"
+#stratum_server_password = "x"
 
-# Plain TCP stratum (the toolkit pool terminates TLS at nginx for HTTPS only;
-# the stratum port itself is plain TCP). Leave false.
+# The node's stratum is plain TCP (no TLS). Leave false.
 stratum_server_tls_enabled = false
 
 # Where grin-miner looks for *.cuckooplugin. With a normal `cargo build --release`

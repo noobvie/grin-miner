@@ -1,9 +1,9 @@
 # Mine Grin testnet on Windows — beginner's guide (via WSL2)
 
 **What this is:** a step-by-step way to run grin-miner **on a Windows 10/11 PC** that
-solves Grin's real proof-of-work (**Cuckatoo32**) and submits shares to a **testnet
-mining pool**, so you can test the pool end to end — on **GPU** (NVIDIA, fast) or
-**CPU** (slow, any machine).
+solves Grin's real proof-of-work (**Cuckatoo32**) against a **testnet node** (or a
+pool), so you can mine end to end — on **GPU** (NVIDIA, fast) or **CPU** (slow, any
+machine).
 
 **Why WSL2 and not a native `.exe`?** grin-miner has **no official Windows build** —
 its CI only produces Linux/macOS binaries, and the C/C++ solver uses GCC/clang compiler
@@ -178,17 +178,20 @@ If the CUDA plugin is missing, `nvcc` wasn't found at build time — revisit Ste
 Copy the ready-made testnet config and edit two lines:
 
 ```bash
-cp windows-x64/grin-miner-testnet-pool.toml ./grin-miner.toml
+cp windows-x64/grin-miner-wsl2.toml ./grin-miner.toml
 nano grin-miner.toml     # or: code grin-miner.toml  (opens VS Code)
 ```
 
-Edit:
+By default it mines to a **local testnet node's built-in stratum** —
+`stratum_server_addr = "127.0.0.1:13416"` (Grin's native stratum port; mainnet is
+`3416`). That needs a grin node running with `enable_stratum_server = true` and a
+wallet listening so the node can build the coinbase. If the node runs in the same
+WSL2, `127.0.0.1` is correct; otherwise use the node's host.
 
-1. **`stratum_server_addr`** → `YOUR_POOL_HOST:13333` (your testnet pool's public
-   stratum host; `13333` is the testnet default port).
-2. **`stratum_server_login`** → `tgrin1youraddress.worker` — your **testnet** Grin
-   address (starts with `tgrin1`) + a worker name. The pool uses the address as your
-   identity (no account/signup).
+**To mine to a pool instead**, set `stratum_server_addr` to the pool's public
+`host:port` and uncomment `stratum_server_login` with the login the pool documents
+(many use address-as-identity, `<grin_address>.<worker>`, e.g.
+`tgrin1youraddress.worker`).
 
 Then pick **one** solver block in the file:
 
@@ -204,11 +207,11 @@ Then pick **one** solver block in the file:
 ./target/release/grin-miner
 ```
 
-You should see it connect to the pool and start submitting graphs. A pool **share**
-needs a found 42-cycle (rare per graph), so on CPU shares are infrequent — that's
-expected and is fine for testing the pool. On GPU shares come much faster.
-
-Check your address on the pool's web stats page to confirm shares are landing.
+You should see it connect to your node (or pool) and start submitting graphs. A
+valid **solution** needs a found 42-cycle (rare per graph), so on CPU they're
+infrequent — that's expected. On GPU they come much faster. At testnet's low
+difficulty, mining to your own node, found solutions become real testnet blocks
+(against a pool you'll see the share credited on its stats page).
 
 ---
 
@@ -228,8 +231,8 @@ Check your address on the pool's web stats page to confirm shares are landing.
 | `lock file version 4 was found ... Cargo needs to be updated` | You built on stable before pinning 1.69, which upgraded `Cargo.lock`. Restore it: `git checkout Cargo.lock`, then re-run the Step 4 commands. |
 | `cmake --build` prints its usage text then build-script exits 1 (`cuckoo_miner`) | Newer CMake (3.28 on Ubuntu 24.04) rejects the empty `--target ""` in `cuckoo-miner/src/build.rs`. Fixed in this branch (`build_target("all")`); if on an older checkout: `sed -i 's/\.build_target("")/.build_target("all")/' cuckoo-miner/src/build.rs`. |
 | `lean.cpp` / submodule errors | You skipped `--recursive`. Run `git submodule update --init --recursive`. |
-| Pool won't connect | Wrong `stratum_server_addr`/port. Testnet is `13333`. Bump `stdout_log_level = "Debug"` in the toml. |
-| Very slow on CPU | Expected — lean CPU is for *testing* the pool, not earning. Use GPU if you have one. |
+| Stratum won't connect | Wrong `stratum_server_addr`/port. The node's built-in stratum is `13416` testnet / `3416` mainnet (a pool uses its own port). Confirm the node has `enable_stratum_server = true`. Bump `stdout_log_level = "Debug"` in the toml. |
+| Very slow on CPU | Expected — lean CPU is for *testing*, not earning. Use GPU if you have one. |
 
 ---
 
