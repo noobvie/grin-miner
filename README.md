@@ -2,14 +2,14 @@
 
 # Grin Miner
 
-A standalone mining implementation intended for mining Grin against a running Grin node.
+A standalone mining implementation intended for mining Grin against a running Grin node (or a pool).
 
 > **⛏️ New to mining? Beginner testnet guides added by this fork:**
 >
-> - **Mac (Apple Silicon: M1/M2/M3/M4)** — CPU-mine Grin testnet to a pool using this fork's
->   **Cuckatoo32 lean** plugin. 👉 **[`macos-arm64/README-m4-testnet.md`](macos-arm64/README-m4-testnet.md)**
-> - **Windows 10/11** — mine Grin testnet to a pool via **WSL2** (the supported Linux build),
->   on **GPU** (NVIDIA CUDA) or **CPU**. 👉 **[`windows-x64/README-windows-testnet.md`](windows-x64/README-windows-testnet.md)**
+> - **Mac (Apple Silicon: M1/M2/M3/M4)** — CPU-mine Grin testnet against your own node (or a
+>   pool) using this fork's **Cuckatoo32 lean** plugin. 👉 **[`macos-arm64/README-m4-testnet.md`](macos-arm64/README-m4-testnet.md)**
+> - **Windows 10/11** — mine Grin testnet against your own node (or a pool) via **WSL2** (the
+>   supported Linux build), on **GPU** (NVIDIA CUDA) or **CPU**. 👉 **[`windows-x64/README-windows-testnet.md`](windows-x64/README-windows-testnet.md)**
 
 ## Supported Platforms
 
@@ -31,7 +31,7 @@ And a [running Grin node](https://github.com/mimblewimble/grin/blob/master/doc/b
 > vanilla `mimblewimble/grin-miner`, which does **not** include this fork's Cuckatoo32 lean CPU
 > plugin. **New to mining, or on a Mac/Windows?** Use the beginner guides linked at the top of
 > this README instead — they install the prerequisites, clone this fork, and walk you all the
-> way to submitting pool shares.
+> way to mining Grin testnet on your hardware.
 
 ```sh
 git clone https://github.com/mimblewimble/grin-miner.git

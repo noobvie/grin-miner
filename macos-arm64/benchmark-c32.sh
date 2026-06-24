@@ -2,16 +2,16 @@
 # =============================================================================
 # benchmark-c32.sh
 # Measure how fast THIS Mac solves Cuckatoo32 with the lean CPU solver, BEFORE
-# you bother with the pool. It builds a tiny standalone binary straight from the
-# cuckoo source (no Rust, no plugin wrapper), solves a few graphs, and prints the
-# measured ms/graph and the implied graphs/sec.
+# you bother with a node or the full miner. It builds a tiny standalone binary
+# straight from the cuckoo source (no Rust, no plugin wrapper), solves a few
+# graphs, and prints the measured ms/graph and the implied graphs/sec.
 #
 # Usage (from the repo root):
 #     bash macos-arm64/benchmark-c32.sh [num_graphs] [nthreads]
 #     bash macos-arm64/benchmark-c32.sh 5 8        # 5 graphs, 8 threads
 # Defaults: num_graphs=5, nthreads = (CPU cores - 1).
 #
-# This is the SAME solver (cuckatoo/lean.cpp, EDGEBITS=32) the pool plugin uses,
+# This is the SAME solver (cuckatoo/lean.cpp, EDGEBITS=32) the full miner uses,
 # so the speed it reports is representative. On arm64 it builds with NSIPHASH=4
 # (NEON 4-way siphash, injected by apply-arm64-patches.sh).
 #
@@ -138,9 +138,9 @@ cat <<EOF
      mean solver. NOTE: NEON barely beats scalar here (~2-3%) — the lean solver is
      memory-latency-bound (random ~512MB bitmap access), so faster siphash is mostly
      hidden behind DRAM waits. SIMD siphash only helps the compute-bound mean solver.
-   - A pool SHARE needs a found 42-cycle (rare), so share cadence is much slower
-     than g/s — fine for testing the pool, not for earning coin.
+   - A valid SOLUTION needs a found 42-cycle (rare), so solution cadence is much
+     slower than g/s — fine for testing, not for earning coin.
 
-  Happy with the speed? Next: build the full miner and point it at your pool:
+  Happy with the speed? Next: build the full miner and point it at your node (or pool):
      bash macos-arm64/build-macos-arm64.sh
 EOF

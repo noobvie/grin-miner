@@ -18,7 +18,7 @@
 #########################################
 [logging]
 log_to_stdout = true
-stdout_log_level = "Info"        # bump to "Debug" if the pool connection misbehaves
+stdout_log_level = "Info"        # bump to "Debug" if the stratum connection misbehaves
 log_to_file = true
 file_log_level = "Debug"
 log_file_path = "grin-miner.log"
@@ -65,7 +65,7 @@ stratum_server_tls_enabled = false
 # The only enabled solver: lean Cuckatoo32 on CPU.
 #   - matches the job's edge_bits = 32 (the live network PoW)
 #   - ~1 GB RAM (vs ~90 GB for a mean solver)
-#   - slow, but correct; fine for testnet share submission / pool testing
+#   - slow, but correct; fine for testnet mining / pool testing
 [[mining.miner_plugin_config]]
 plugin_name = "cuckatoo_lean_cpu_compat_32"
 [mining.miner_plugin_config.parameters]

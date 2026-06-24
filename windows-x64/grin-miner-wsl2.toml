@@ -16,7 +16,7 @@
 #########################################
 [logging]
 log_to_stdout = true
-stdout_log_level = "Info"        # bump to "Debug" if the pool connection misbehaves
+stdout_log_level = "Info"        # bump to "Debug" if the stratum connection misbehaves
 log_to_file = true
 file_log_level = "Debug"
 log_file_path = "grin-miner.log"

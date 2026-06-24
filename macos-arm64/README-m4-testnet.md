@@ -91,7 +91,7 @@ works** — the solver compiles and runs on your Mac. (Tune it: `bash
 macos-arm64/benchmark-c32.sh 8 6` = 8 graphs, 6 threads.)
 
 > Expect something like **0.01–0.03 g/s** on an M4 Max. That's normal for CPU lean
-> mining and is plenty to test a pool (more on speed below).
+> mining and is plenty for testnet mining (more on speed below).
 
 ---
 
@@ -184,7 +184,7 @@ Stop it with `Ctrl-C`. Logs are written to `grin-miner.log`.
   *mean* solver, which is compute-bound — but that needs ~90 GB RAM and won't fit.) NEON is
   kept because it's correct and marginally faster with no downside; to revert to scalar, set
   `LEAN_NSIPHASH=1` in `CMakeLists.txt`. Bottom line: this is about as fast as the lean CPU
-  path gets on Apple Silicon — fine for testing the pool, not for earning coin.
+  path gets on Apple Silicon — fine for testing, not for earning coin.
 
 ---
 
