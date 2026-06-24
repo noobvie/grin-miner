@@ -44,7 +44,7 @@ ocl_cuckaroo = { path = "./ocl_cuckaroo", version = "1.0.2", optional = true}
 [dependencies.cursive]
 version = "0.14"
 default-features = false
-features = ["pancurses-backend"]
+features = ["crossterm-backend"]
 optional = true
 
 
