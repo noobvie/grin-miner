@@ -165,11 +165,17 @@ Stop it with `Ctrl-C`. Logs are written to `grin-miner.log`.
   so at ~0.02 g/s expect an **accepted share every ~20–40 minutes** on testnet.
   Enough to exercise the share → credit → maturity → payout pipeline overnight; not
   enough to accumulate coin.
-- **Speed:** the arm64 build uses a **NEON 4-way siphash** (`NSIPHASH=4`, injected by
-  `apply-arm64-patches.sh`), ~2–4× the old scalar path. `benchmark-c32.sh` verifies the
-  NEON hash matches the scalar hash bit-for-bit before timing, so a mismatch aborts
-  rather than mining bad shares. To force the old scalar path, set `LEAN_NSIPHASH=1` in
-  `CMakeLists.txt`. (The g/s figures above predate NEON; expect them ~2–4× higher.)
+- **NEON siphash — verified correct, but barely faster (measured on an M4):** the arm64
+  build uses a **NEON 4-way siphash** (`NSIPHASH=4`, injected by `apply-arm64-patches.sh`).
+  `benchmark-c32.sh` verifies its output matches the scalar hash bit-for-bit before timing
+  (aborts on mismatch, so it never mines bad shares). **However, the real-world gain is only
+  ~2–3%** (e.g. 0.0176 → 0.0181 g/s): the lean solver is **memory-latency-bound** — its hot
+  loop does random access into a ~512 MB bitmap that dwarfs cache, so the core mostly waits
+  on DRAM and a 4× faster siphash barely moves the total. (SIMD siphash only pays off on the
+  *mean* solver, which is compute-bound — but that needs ~90 GB RAM and won't fit.) NEON is
+  kept because it's correct and marginally faster with no downside; to revert to scalar, set
+  `LEAN_NSIPHASH=1` in `CMakeLists.txt`. Bottom line: this is about as fast as the lean CPU
+  path gets on Apple Silicon — fine for testing the pool, not for earning coin.
 
 ---
 

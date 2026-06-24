@@ -20,11 +20,13 @@ if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
 	set (NOAVX2 "")                   # x86-only flag -> empty on arm64
 	# Upstream siphashxN.h only ships x86 SIMD siphash (SSE2/AVX2). macos-arm64/
 	# apply-arm64-patches.sh injects a NEON 2-way/4-way siphash (uint64x2_t) that
-	# mirrors the SSE2 path bit-for-bit, so arm64 can use NSIPHASH=4 (~2-4x over
-	# the old scalar NSIPHASH=1 fallback). NEON is mandatory on ARMv8, so it is
-	# always present on Apple Silicon. That same script also guards out the
-	# unconditional <immintrin.h> include for arm64. Both run from the build/
-	# benchmark scripts. (To force the old scalar path, set LEAN_NSIPHASH=1.)
+	# mirrors the SSE2 path bit-for-bit, so arm64 can use NSIPHASH=4. NEON is
+	# mandatory on ARMv8, so it is always present on Apple Silicon. That same script
+	# also guards out the unconditional <immintrin.h> include for arm64. Both run
+	# from the build/benchmark scripts.
+	# NOTE: measured gain is only ~2-3% (the lean solver is memory-latency-bound on
+	# its ~512MB bitmap, so faster siphash is hidden behind DRAM waits). Kept anyway
+	# (correct + marginally faster, no downside). To force scalar, set LEAN_NSIPHASH=1.
 	set (LEAN_NSIPHASH 4)
 	message (STATUS "CuckooMinerPlugins: building for Apple Silicon / arm64 (lean CPU targets only, NEON 4-way siphash)")
 else()

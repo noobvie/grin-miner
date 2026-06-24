@@ -134,8 +134,10 @@ rm -f "$LOG"
 cat <<EOF
 
   Interpreting this:
-   - This g/s is the lean CPU rate (now NEON 4-way siphash). Expect it well below
-     a GPU mean solver, but ~2-4x the old scalar build.
+   - This g/s is the lean CPU rate (NEON 4-way siphash). Expect it well below a GPU
+     mean solver. NOTE: NEON barely beats scalar here (~2-3%) — the lean solver is
+     memory-latency-bound (random ~512MB bitmap access), so faster siphash is mostly
+     hidden behind DRAM waits. SIMD siphash only helps the compute-bound mean solver.
    - A pool SHARE needs a found 42-cycle (rare), so share cadence is much slower
      than g/s — fine for testing the pool, not for earning coin.
 
